@@ -1,0 +1,25 @@
+{
+  "disabled": false,
+  "bindings": [
+    {
+      "authLevel": "function",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    },
+    {
+      "name": "ringDocument",
+      "type": "documentDB",
+      "databaseName": "ring",
+      "collectionName": "events",
+      "createIfNotExists": true,
+      "connection": "CosmosDbConnectionString",     
+      "direction": "out"
+  }
+  ]
+}

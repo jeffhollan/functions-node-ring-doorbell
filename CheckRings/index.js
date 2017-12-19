@@ -2,6 +2,7 @@ const RingAPI = require('doorbot');
 const https = require('https');
 const url = require('url');
 const eventGridUrl = url.parse(process.env['eventgrid_endpoint']);
+const utils = require('../function-utils');
 
 const ring = RingAPI({
     email: process.env['ring_email'],
@@ -45,7 +46,7 @@ module.exports = function (context, myTimer) {
 function EmitEvent(ringEvent, context, callback) {
     context.log('Sending event to event grid.');
     var eventGridPayload = [{
-        id: generateUUID(),
+        id: utils.generateUUID(),
         eventType: ringEvent['kind'],
         subject: 'ring/frontDoor',
         eventTime: new Date().toISOString(),
@@ -65,16 +66,6 @@ function EmitEvent(ringEvent, context, callback) {
     req.write(JSON.stringify(eventGridPayload));
     req.end();
 }
-
-function generateUUID() {
-    var d = new Date().getTime();
-    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = (d + Math.random() * 16) % 16 | 0;
-        d = Math.floor(d / 16);
-        return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-    return uuid;
-};
 
 // TODO: Change to call keyvault to grab secrets
 function GetSecrets() {
