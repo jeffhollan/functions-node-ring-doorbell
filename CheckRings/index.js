@@ -5,7 +5,7 @@ const eventGridUrl = url.parse(process.env['eventgrid_endpoint']);
 
 const ring = RingAPI({
     email: process.env['ring_email'],
-    password: process.env['ring_password'],
+    password: GetSecrets().ring_password,
     retries: 10, //authentication retries, optional, defaults to 0
 });
 
@@ -15,7 +15,7 @@ const options = {
     path: eventGridUrl.path,
     headers: {
         'content-type': 'application/json',
-        'aeg-sas-key': process.env['eventgrid_key'],
+        'aeg-sas-key': GetSecrets().eventgrid_key,
         Accept: 'application/json'
     },
     method: 'POST'
@@ -75,3 +75,11 @@ function generateUUID() {
     });
     return uuid;
 };
+
+// TODO: Change to call keyvault to grab secrets
+function GetSecrets() {
+    return {
+        eventgrid_key: process.env['eventgrid_key'],
+        ring_password: process.env['ring_password']
+    }
+}
