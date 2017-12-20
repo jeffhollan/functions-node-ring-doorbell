@@ -5,11 +5,12 @@ module.exports = function (context, req) {
 
     var ringData = req.body[0];
     ringData['id'] = utils.generateUUID();
-
-    context.ringDocument = JSON.stringify(ringData);
+    context.log(ringData);
+    context.bindings.ringDocument = JSON.stringify(ringData);
 
     context.res = {
-        status: 202
+        status: 202,
+        body: null
     };
     context.done();
 };
