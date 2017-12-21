@@ -7,3 +7,11 @@ module.exports.generateUUID = function() {
     });
     return uuid;
 };
+
+// TODO: Change to call keyvault to grab secrets
+module.exports.getSecrets = function () {
+    return {
+        eventgrid_key: process.env['eventgrid_key'],
+        ring_password: process.env['ring_password']
+    }
+}

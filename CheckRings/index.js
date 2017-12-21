@@ -1,14 +1,9 @@
-const RingAPI = require('doorbot');
 const https = require('https');
-const url = require('url');
-const eventGridUrl = url.parse(process.env['eventgrid_endpoint']);
-const utils = require('../function-utils');
+const parse = require('url').parse;
+const eventGridUrl = parse(process.env['eventgrid_endpoint']);
 
-const ring = RingAPI({
-    email: process.env['ring_email'],
-    password: GetSecrets().ring_password,
-    retries: 10, //authentication retries, optional, defaults to 0
-});
+const utils = require('../function-utils');
+const ring = require('../ring-api').ring_client;
 
 const options = {
     protocol: 'https:',    
@@ -16,7 +11,7 @@ const options = {
     path: eventGridUrl.path,
     headers: {
         'content-type': 'application/json',
-        'aeg-sas-key': GetSecrets().eventgrid_key,
+        'aeg-sas-key': utils.getSecrets().eventgrid_key,
         Accept: 'application/json'
     },
     method: 'POST'
@@ -65,12 +60,4 @@ function EmitEvent(ringEvent, context, callback) {
     });
     req.write(JSON.stringify(eventGridPayload));
     req.end();
-}
-
-// TODO: Change to call keyvault to grab secrets
-function GetSecrets() {
-    return {
-        eventgrid_key: process.env['eventgrid_key'],
-        ring_password: process.env['ring_password']
-    }
 }
