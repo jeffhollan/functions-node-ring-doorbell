@@ -1,0 +1,283 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "videoindexer_apikey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The API Key for this api"
+      }
+    },
+    "cosmosdb_database": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the account without 'documents.azure.com' part"
+      },
+      "defaultValue": "ringdoorbell"
+    },
+    "cosmosdb_accessKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Primary or Secondary Key"
+      }
+    },
+    "LogicAppLocation": {
+      "type": "string",
+      "defaultValue": "westus2"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "triggers": {
+            "When_a_resource_event_occurs": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azureeventgrid']['connectionId']"
+                  }
+                },
+                "path": "/subscriptions/@{encodeURIComponent('7e6ec17f-2abc-4559-a23d-f6520cbb89a6')}/providers/@{encodeURIComponent('Microsoft.EventGrid.topics')}/resource/eventSubscriptions",
+                "queries": {
+                  "x-ms-api-version": "2017-06-15-preview"
+                },
+                "body": {
+                  "properties": {
+                    "topic": "/subscriptions/7e6ec17f-2abc-4559-a23d-f6520cbb89a6/resourceGroups/ring-doorbell/providers/Microsoft.EventGrid/topics/ring-doorbell"
+                  }
+                }
+              },
+              "splitOn": "@triggerBody()"
+            }
+          },
+          "actions": {
+            "Until": {
+              "type": "Until",
+              "expression": "@not(equals(outputs('GetRecording')['statusCode'], 404))",
+              "limit": {
+                "count": 60,
+                "timeout": "PT1H"
+              },
+              "actions": {
+                "GetRecording": {
+                  "type": "Function",
+                  "inputs": {
+                    "body": "@triggerBody()",
+                    "function": {
+                      "id": "[resourceId('Microsoft.Web/sites/functions', 'ringdoorbell', 'GetRecording')]"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Delay": {
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 15,
+                      "unit": "Second"
+                    }
+                  },
+                  "runAfter": {
+                    "GetRecording": [
+                      "Failed"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {}
+            },
+            "Upload_video_and_index_(using_a_URL)": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['videoindexer']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Api/Partner/Breakdowns",
+                "queries": {
+                  "videoUrl": "@{body('GetRecording')}",
+                  "name": "@triggerBody()?['eventTime']",
+                  "privacy": "Private"
+                }
+              },
+              "runAfter": {
+                "Until": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Get_video_breakdown": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['videoindexer']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Api/Partner/Breakdowns/@{encodeURIComponent(body('Upload_video_and_index_(using_a_URL)'))}"
+              },
+              "runAfter": {
+                "Until_video_is_processed": [
+                  "Succeeded"
+                ]
+              }
+            },           
+            "Until_video_is_processed": {
+              "type": "Until",
+              "expression": "@equals(body('Get_processing_state')?['state'], 'Processed')",
+              "limit": {
+                "count": 60,
+                "timeout": "PT1H"
+              },
+              "actions": {
+                "Get_processing_state": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['videoindexer']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/Api/Partner/Breakdowns/@{encodeURIComponent(body('Upload_video_and_index_(using_a_URL)'))}/State"
+                  },
+                  "runAfter": {}
+                },
+                "Delay_2": {
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 30,
+                      "unit": "Second"
+                    }
+                  },
+                  "runAfter": {
+                    "Get_processing_state": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Upload_video_and_index_(using_a_URL)": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Create_or_update_document": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['documentdb']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/dbs/@{encodeURIComponent('ring')}/colls/@{encodeURIComponent('videobreakdown')}/docs",
+                "body": "@body('Get_video_breakdown')"
+              },
+              "runAfter": {
+                "Get_video_breakdown": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          
+          "contentVersion": "1.0.0.0",
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "documentdb": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'westus2', '/managedApis/', 'documentdb')]",
+                "connectionId": "documentdb",
+                "connectionName": "Cosmos DB"
+              },
+              "videoindexer": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'westus2', '/managedApis/', 'videoindexer')]",
+                "connectionId": "videoindexer",
+                "connectionName": "Azure Video Indexer"
+              },
+              "azureeventgrid": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'westus2', '/managedApis/', 'azureeventgrid')]",
+                "connectionId": "azureeventgrid",
+                "connectionName": "Ring Event Grid"
+              }
+            }
+          }
+        },
+        "integrationAccount": null
+      },
+      "name": "ring-to-video-indexer",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('LogicAppLocation')]",
+      "tags": {},
+      "apiVersion": "2016-06-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', 'documentdb')]",
+        "[resourceId('Microsoft.Web/connections', 'videoindexer')]",
+        "[resourceId('Microsoft.Web/connections', 'azureeventgrid')]"
+      ]
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "videoindexer",
+      "location": "westus2",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'westus2', '/managedApis/', 'videoindexer')]"
+        },
+        "displayName": "Azure Video Indexer",
+        "parameterValues": {
+          "api_key": "[parameters('videoindexer_apikey')]"
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "documentdb",
+      "location": "westus2",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'westus2', '/managedApis/', 'documentdb')]"
+        },
+        "displayName": "Cosmos DB",
+        "parameterValues": {
+          "databaseAccount": "[parameters('cosmosdb_database')]",
+          "accessKey": "[parameters('cosmosdb_accessKey')]"
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "azureeventgrid",
+      "location": "westus2",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'westus2', '/managedApis/', 'azureeventgrid')]"
+        },
+        "displayName": "Ring Event Grid"
+      }
+    }
+  ],
+  "outputs": {}
+}
