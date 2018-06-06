@@ -4,7 +4,7 @@
   "description": "Azure Functions to integrate with Ring.com doorbell",
   "main": "CheckRings/index.js",
   "dependencies": {
-    "doorbot": "^3.0.1"
+    "doorbot": "5.0.0"
   },
   "devDependencies": {},
   "scripts": {

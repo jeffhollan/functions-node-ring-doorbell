@@ -20,11 +20,10 @@ const options = {
 module.exports = function (context, myTimer) {
     var timeStamp = new Date().toISOString();
     context.log('JavaScript timer trigger function triggered.', timeStamp);
-
     // Check rings from ring.com
     ring.dings((e, json) => {
         // If rings are returned
-        if (json.length != 0) {
+        if (json != null && json.length != 0) {
             context.log(`Got a ring of kind ${json[0]['kind']}`);
             // Send an event to EventGrid
             EmitEvent(json[0], context, (res) => {
